@@ -6,43 +6,42 @@ Audit date: 2026-08-14. Scope: `public/index.html`, `public/app.js`, `vercel.jso
 
 - **Client-side only.** No backend; keys never leave the device. `to`/`value` are derived locally from keys, so even a
   hostile RPC server cannot redirect funds — it only relays your signed transaction.
-- **Strict CSP** (`script-src 'self'`, no `unsafe-eval`, `img-src 'none'`). No external/remote script can load, which
-  kills the most common wallet-drain attack (injected keylogger / exfil).
-- **Vault at rest:** PBKDF2 + AES-256-GCM via WebCrypto, random salt + IV per save, 5-fail self-wipe, keys cleared
-  from JS memory on `beforeunload`.
+- **Strict CSP** (`script-src 'self'`, no `unsafe-eval`, `img-src 'none'`). No external/remote script can load.
+- **Vault at rest:** PBKDF2 + AES-256-GCM via WebCrypto, random salt + IV per save, keys cleared from memory on
+  `beforeunload` and on idle.
 - **Vendored + integrity-pinned ethers** — no runtime supply-chain CDN dependency.
 
-## Open findings (unfixed as of this audit)
+## Fixed (2026-08-14)
 
-### 1. HIGH — "WIPE SAVED" does not wipe the saved vault
-`app.js` `wipe()` clears in-memory keys only; it never calls `setVault(null)`. The label implies the encrypted
-localStorage vault is removed, but it persists and is restored on next unlock. Only the overlay "Reset (clear saved)"
-actually deletes it. **Fix:** have `wipe()` also `setVault(null)` + `clearFails()`.
+### 1. "WIPE SAVED" now really wipes — HIGH
+`wipe()` previously only cleared in-memory keys. It now calls `deepWipe()` which removes the encrypted
+`localStorage` vault (`setVault(null)`), clears the fail counter, drops the passphrase, and shows a destructive-action
+confirm. The overlay "Reset (clear saved)" uses the same path.
 
-### 2. MEDIUM-HIGH — Weak KDF + weak password floor
-- PBKDF2 at **100k iterations** (below OWASP's current 600k recommendation). Whoever obtains the localStorage blob
-  (malware, backup, browser sync) can brute-force offline.
-- Minimum password is **4 characters** — trivial for a crypto keystore.
-**Fix:** raise iterations to ≥600k and enforce a ≥10-char password.
+### 2. 4 wrong attempts → full wipe (was 5) + stronger KDF — MEDIUM-HIGH
+- Fail threshold is now `MAX_FAILS = 4`. On the 4th wrong password the vault is **wiped for real** (memory + saved
+  blob), not just locked.
+- PBKDF2 iterations raised from **100k to 600k** (OWASP-aligned). New vault blobs tag their iteration count (`n`);
+  old blobs without the tag decrypt at the historical 100k so nothing breaks.
+- Password floor stays at 4 chars (explicit user decision).
 
-### 3. MEDIUM — No auto re-lock
-Only `beforeunload` clears keys from memory. A tab left unlocked keeps the passphrase alive indefinitely, and
-"Export to clipboard" exposes every key with zero re-auth. **Fix:** idle-based re-lock (e.g. 5 min).
+### 3. Auto re-lock — MEDIUM
+Keys are now cleared from memory after an idle timeout. Default **30 minutes**, configurable under
+**Settings → Security → Auto re-lock after (minutes)** (`0` disables). The idle timer resets on any user activity and
+re-arms after every unlock. On expiry the app returns to the unlock overlay and keys are wiped from memory.
 
-### 4. MEDIUM — Untrusted RPC error text injected via `innerHTML`
-`netStatus.innerHTML` renders attacker-controlled strings from the user-configurable RPC endpoint. CSP currently
-blocks script execution from it, but it should use `textContent`. Same pattern at the wallet status renders — those are
-local-only (low risk), but RPC-derived error strings must not be interpolated as HTML.
+### 4. Untrusted RPC error text no longer injected as HTML — MEDIUM
+`netStatus` error output switched from `innerHTML` to `textContent`, so an attacker-controlled string from a
+user-supplied RPC endpoint cannot break out of the page structure (defense in depth on top of CSP).
 
-### 5. LOW — No confirmation before irreversible sends
-Run Relay fires N signed txs in one click. A wrong direction/amount is unrecoverable. **Fix:** pre-run summary
-(from → to → amount) + confirm.
+### 5. Confirmation before irreversible sends — LOW
+`runRelay` now shows a pre-flight `confirm()` (direction + pair count + warning that real signed txs will be sent).
 
-### 6. LOW — Keys linger in DOM + clipboard
-Generated keys sit plaintext in the table (screenshot/shoulder-surf risk); "Copy CSV"/"Export CSV"/"XLSX" put all keys
-on the clipboard, readable by any other app. Consider masking until needed and warning on export.
+### 6. Confirmation before full export — LOW
+All three export buttons (CSV / XLSX / clipboard) now confirm before dumping every private key in plaintext.
 
-## Non-issues
+## Residual notes
+- Generated keys still sit plaintext in the generator table and clipboard for the duration of a session — inherent to
+  "copy your key now" UX; auto re-lock and export confirmations reduce the window.
 - `connect-src https: wss:` is intentionally permissive (user-supplied RPCs) — acceptable because `script-src` blocks
-  execution.
-- RPC cannot redirect funds (local signing), cannot read keys (they never leave the browser).
+  execution and RPC cannot read keys or redirect locally-signed funds.

@@ -255,6 +255,15 @@
       <div class="hint">Each hop uses a randomized amount + delay so txs don't hit at the same time. Buffer forwards the same amount it received (1:1). Requires gas on every signing wallet.</div>
     </div>
 
+    <!-- SECURITY -->
+    <div class="card c6">
+      <h2>Security</h2>
+      <div class="row">
+        <div class="f"><label>Auto re-lock after (minutes)</label><input id="lockMin" value="30" type="number" min="0" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="hint">0 = never re-lock. After this many idle minutes the keys are cleared from memory and you must unlock again. Failed password attempts: <b>4</b> → saved keys are wiped.</div>
+    </div>
+
   </div>
 </div>
 

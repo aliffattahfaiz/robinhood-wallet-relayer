@@ -5,6 +5,9 @@
 
   const VAULT_KEY = "rhwr_vault";
   const FAILS_KEY = "rhwr_fails";
+  const LOCK_KEY = "rhwr_lock_min";
+  const MAX_FAILS = 4;
+  const KDF_ITER = 600000;
 
   // ---------- chain presets ----------
   const CHAINS = {
@@ -39,20 +42,20 @@
   const V = {
     b64(u) { let s = ""; for (const b of u) s += String.fromCharCode(b); return btoa(s); },
     unb64(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; },
-    async key(pw, salt) {
+    async key(pw, salt, iter) {
       const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
-      return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+      return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     },
     async encrypt(pw, plain) {
       const salt = crypto.getRandomValues(new Uint8Array(16));
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const k = await this.key(pw, salt);
+      const k = await this.key(pw, salt, KDF_ITER);
       const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, new TextEncoder().encode(plain));
-      return JSON.stringify({ s: this.b64(salt), i: this.b64(iv), c: this.b64(new Uint8Array(ct)) });
+      return JSON.stringify({ n: KDF_ITER, s: this.b64(salt), i: this.b64(iv), c: this.b64(new Uint8Array(ct)) });
     },
     async decrypt(pw, blob) {
       const o = JSON.parse(blob);
-      const k = await this.key(pw, this.unb64(o.s));
+      const k = await this.key(pw, this.unb64(o.s), o.n || 100000);
       const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: this.unb64(o.i) }, k, this.unb64(o.c));
       return new TextDecoder().decode(pt);
     }
@@ -106,6 +109,15 @@
     $("chainId").value = p.chainId;
     if (p.rpc) $("rpc").value = p.rpc;
     if ($("preset").value === "custom") $("rpc").value = "";
+  };
+  $("lockMin").value = getLockMin();
+  $("lockMin").onchange = () => {
+    const raw = parseInt($("lockMin").value, 10);
+    const v = Number.isNaN(raw) || raw < 0 ? 30 : raw;
+    setLockMin(v);
+    $("lockMin").value = v;
+    if (vaultPass) armLock();
+    log("Auto re-lock set to " + (v ? v + " min" : "never") + ".", "ok");
   };
 
   // ---------- generator ----------
@@ -217,7 +229,7 @@
       $("netStatus").innerHTML = '<span class="ok">Connected.</span> chainId <b>' + net.chainId.toString() + '</b> · block <b>' + block + '</b>';
       log("RPC connected: chainId " + net.chainId.toString() + ", block " + block + ".", "ok");
     } catch (e) {
-      $("netStatus").innerHTML = '<span class="bad">Failed:</span> ' + (e.shortMessage || e.message);
+      $("netStatus").textContent = "Failed: " + (e.shortMessage || e.message);
       log("RPC test failed: " + (e.shortMessage || e.message), "bad");
     }
   };
@@ -451,6 +463,7 @@
       log("Nothing to export — no wallets set.", "bad");
       return false;
     }
+    if (!confirm("Export ALL wallet addresses + private keys in plaintext?\nAnyone with this file/clipboard can spend everything. Continue?")) return false;
     return true;
   }
   $("exportCsv").onclick = () => {
@@ -539,6 +552,8 @@
     if (!main) { log("Set a main wallet first.", "bad"); return; }
     const n = Math.min(buffers.length, hots.length);
     if (!n) { log("Need at least 1 buffer + 1 hot wallet.", "bad"); return; }
+    const dir = $("direction").value === "down" ? "deposit (main → buffer → hot)" : "sweep (hot → buffer → main)";
+    if (!confirm("Relay " + dir + " for " + n + " pair(s)?\n\nEach hop sends real signed transactions. Continue?")) return;
     running = true; stopFlag = false;
     $("relayRun").disabled = true;
     log("Relay started — " + ($("direction").value === "down" ? "deposit" : "sweep") + " · " + n + " pair(s).", "ok");
@@ -563,6 +578,30 @@
     const payload = JSON.stringify({ main, buffers, hots });
     V.encrypt(vaultPass, payload).then(setVault).catch(() => {});
   }
+  function getLockMin() { try { const v = parseInt(localStorage.getItem(LOCK_KEY) || "30", 10); return Number.isNaN(v) || v < 0 ? 30 : v; } catch { return 30; } }
+  function setLockMin(v) { try { localStorage.setItem(LOCK_KEY, String(v)); } catch { } }
+  function deepWipe() {
+    setVault(null); clearFails(); vaultPass = null;
+    main = null; buffers = []; hots = [];
+  }
+  function relock() {
+    vaultPass = null; main = null; buffers = []; hots = [];
+    renderTiers();
+    initVault();
+  }
+  let lockTimer = null;
+  function armLock() {
+    if (lockTimer) clearTimeout(lockTimer);
+    const min = getLockMin();
+    if (min <= 0 || !vaultPass) return;
+    lockTimer = setTimeout(() => {
+      log("Auto re-lock: cleared keys from memory after " + min + " min idle.", "warn");
+      relock();
+    }, min * 60000);
+  }
+  ["click", "keydown", "mousemove", "scroll", "touchstart"].forEach((ev) =>
+    window.addEventListener(ev, () => { if (vaultPass) armLock(); }, { passive: true })
+  );
   async function onVaultSubmit() {
     const pw = $("vaultPass").value;
     const blob = getVault();
@@ -572,21 +611,21 @@
       setVault(await V.encrypt(pw, "{}"));
       clearFails();
     } else {
-      if (getFails() >= 5) {
-        setVault(null); vaultPass = null; wipe(); initVault();
+      if (getFails() >= MAX_FAILS) {
+        deepWipe(); initVault();
         $("vaultMsg").textContent = "Too many failed attempts. Saved keys were wiped.";
         return;
       }
       try { await V.decrypt(pw, blob); }
       catch (e) {
         const n = getFails() + 1;
-        if (n >= 5) {
-          setVault(null); vaultPass = null; wipe(); initVault();
+        if (n >= MAX_FAILS) {
+          deepWipe(); initVault();
           $("vaultMsg").textContent = "Too many failed attempts. Saved keys were wiped.";
           return;
         }
         setFails(n);
-        $("vaultMsg").textContent = "Wrong password. " + (5 - n) + " attempt(s) left before saved keys are wiped.";
+        $("vaultMsg").textContent = "Wrong password. " + (MAX_FAILS - n) + " attempt(s) left before saved keys are wiped.";
         return;
       }
     }
@@ -594,6 +633,7 @@
     clearFails();
     $("vaultOverlay").style.display = "none";
     await restoreState();
+    armLock();
   }
   async function restoreState() {
     const blob = getVault();
@@ -615,12 +655,14 @@
   }
   async function onVaultReset() {
     if (!confirm("Reset clears ALL saved keys and settings. Continue?")) return;
-    setVault(null); clearFails(); vaultPass = null; wipe();
+    deepWipe();
     initVault();
   }
   function wipe() {
-    main = null; buffers = []; hots = [];
+    if (!confirm("Wipe ALL saved keys from this browser? This deletes the encrypted vault — it cannot be undone.")) return;
+    deepWipe();
     renderTiers();
+    initVault();
   }
   $("wipe").onclick = wipe;
   $("vaultBtn").onclick = onVaultSubmit;
