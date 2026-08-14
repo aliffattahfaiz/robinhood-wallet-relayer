@@ -90,6 +90,7 @@
 <div class="tabs">
   <button class="tab on" id="tabGenBtn">1 · WALLET GENERATOR</button>
   <button class="tab" id="tabRelBtn">2 · WALLET RELAYER</button>
+  <button class="tab" id="tabSetBtn">3 · SETTINGS</button>
 </div>
 
 <!-- ============ TAB 1: GENERATOR ============ -->
@@ -127,6 +128,79 @@
 <div id="tabRel" class="hidden">
   <div class="grid">
 
+    <!-- MAIN WALLET -->
+    <div class="card c4">
+      <h2>Main wallet <span class="kv">— exactly 1, source / sink</span></h2>
+      <label>Private key (one only; replacing overwrites)</label>
+      <textarea id="mainKey" class="mask" rows="2" placeholder="0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="mainSave">Save main wallet</button>
+        <button class="ghost" id="mainToggle">Show</button>
+      </div>
+      <div class="status" id="mainStatus">No main wallet.</div>
+    </div>
+
+    <!-- BUFFER WALLETS -->
+    <div class="card c4">
+      <h2>Buffer <span class="kv">— relay middle tier</span></h2>
+      <label>Private keys — one per line, or generate below</label>
+      <textarea id="bufKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="bufAdd">Add</button>
+        <button id="bufGen">Generate 1</button>
+        <button class="ghost" id="bufToggle">Show</button>
+        <button class="danger" id="bufClear">Clear</button>
+      </div>
+      <div class="status" id="bufStatus">No buffer wallets.</div>
+    </div>
+
+    <!-- HOT WALLETS -->
+    <div class="card c4">
+      <h2>Hot <span class="kv">— paired 1:1, receive / spend</span></h2>
+      <label>Private keys — one per line, or generate below</label>
+      <textarea id="hotKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="hotAdd">Add</button>
+        <button id="hotGen">Generate 1</button>
+        <button class="ghost" id="hotToggle">Show</button>
+        <button class="danger" id="hotClear">Clear</button>
+      </div>
+      <div class="status" id="hotStatus">No hot wallets.</div>
+    </div>
+
+    <!-- PAIRING -->
+    <div class="card c12">
+      <div class="logbar"><h2 style="margin:0">Pairing — 1:1 buffer ↔ hot</h2>
+        <div><button id="exportAll">Export all (addr + key + pairs)</button></div></div>
+      <div class="status" id="pairStatus"></div>
+      <div id="pairList"></div>
+    </div>
+
+    <!-- EXECUTE -->
+    <div class="card c12">
+      <div class="row">
+        <div class="status" id="relayStatus"></div>
+      </div>
+      <div class="btns" style="margin-top:6px">
+        <button class="fire" id="relayRun">▶ RUN RELAY</button>
+        <button class="danger" id="relayStop">Stop</button>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="card c12">
+      <div class="logbar"><h2 style="margin:0">Log</h2>
+        <div><button class="ghost" id="copyLog">Copy</button> <button class="ghost" id="clearLog">Clear</button></div></div>
+      <pre id="log" role="log" aria-live="polite" aria-label="Activity log"></pre>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ TAB 3: SETTINGS ============ -->
+<div id="tabSet" class="hidden">
+  <div class="grid">
+
     <!-- NETWORK -->
     <div class="card c6">
       <h2>Network</h2>
@@ -149,55 +223,8 @@
       <div class="status" id="netStatus">Not connected.</div>
     </div>
 
-    <!-- MAIN WALLET -->
-    <div class="card c6">
-      <h2>Main wallet <span class="kv">— exactly 1, holds the source / sink of funds</span></h2>
-      <label>Private key (one only; replacing overwrites)</label>
-      <textarea id="mainKey" class="mask" rows="2" placeholder="0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
-      <div class="btns">
-        <button id="mainSave">Save main wallet</button>
-        <button class="ghost" id="mainToggle">Show</button>
-      </div>
-      <div class="status" id="mainStatus">No main wallet.</div>
-    </div>
-
-    <!-- BUFFER WALLETS -->
-    <div class="card c8">
-      <h2>Buffer wallets <span class="kv">— the relay middle tier</span></h2>
-      <label>Private keys — one per line, or generate below</label>
-      <textarea id="bufKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
-      <div class="btns">
-        <button id="bufAdd">Add buffer keys</button>
-        <button id="bufGen">Generate 1 buffer</button>
-        <button class="ghost" id="bufToggle">Show</button>
-        <button class="danger" id="bufClear">Clear all</button>
-      </div>
-      <div class="status" id="bufStatus">No buffer wallets.</div>
-    </div>
-
-    <!-- HOT WALLETS -->
-    <div class="card c8">
-      <h2>Hot wallets <span class="kv">— paired 1:1 with buffers, receive / spend</span></h2>
-      <label>Private keys — one per line, or generate below</label>
-      <textarea id="hotKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
-      <div class="btns">
-        <button id="hotAdd">Add hot keys</button>
-        <button id="hotGen">Generate 1 hot</button>
-        <button class="ghost" id="hotToggle">Show</button>
-        <button class="danger" id="hotClear">Clear all</button>
-      </div>
-      <div class="status" id="hotStatus">No hot wallets.</div>
-    </div>
-
-    <!-- PAIRING -->
-    <div class="card c12">
-      <h2>Pairing — 1:1 buffer ↔ hot</h2>
-      <div class="status" id="pairStatus"></div>
-      <div id="pairList"></div>
-    </div>
-
     <!-- RELAY CONFIG -->
-    <div class="card c8">
+    <div class="card c6">
       <h2>Relay config</h2>
       <div class="row">
         <div class="f"><label>Direction</label>
@@ -226,18 +253,6 @@
         <div class="f hidden" id="delayMaxBox"><label>Delay max (ms)</label><input id="delayMax" value="5000" spellcheck="false" autocomplete="off"></div>
       </div>
       <div class="hint">Each hop uses a randomized amount + delay so txs don't hit at the same time. Buffer forwards the same amount it received (1:1). Requires gas on every signing wallet.</div>
-      <div class="btns" style="margin-top:10px">
-        <button class="fire" id="relayRun">▶ RUN RELAY</button>
-        <button class="danger" id="relayStop">Stop</button>
-      </div>
-      <div class="status" id="relayStatus"></div>
-    </div>
-
-    <!-- LOG -->
-    <div class="card c12">
-      <div class="logbar"><h2 style="margin:0">Log</h2>
-        <div><button class="ghost" id="copyLog">Copy</button> <button class="ghost" id="clearLog">Clear</button></div></div>
-      <pre id="log" role="log" aria-live="polite" aria-label="Activity log"></pre>
     </div>
 
   </div>

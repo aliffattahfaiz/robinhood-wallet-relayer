@@ -1,12 +1,14 @@
 # RH Wallet Relayer
 
 A client-side **Robinhood Chain** (any EVM) wallet utility that runs entirely in the browser and deploys to Vercel as a
-static site. Two tools in one page:
+static site. Three tabs:
 
 1. **Wallet Generator** — mint fresh random wallets, copy the address + private key, export CSV, or push them straight
    into the relayer tiers.
-2. **Wallet Relayer** — a three-tier fund pipeline: **main → buffer → hot**, or back up again. Every buffer is paired
-   1:1 with a hot wallet and forwards the exact amount it received.
+2. **Wallet Relayer** — the tiers and pairing: **main → buffer → hot**, or back up again. Every buffer is paired 1:1
+   with a hot wallet and forwards the exact amount it received. Also **Export all** — dumps every address + private key
+   as CSV including which buffer ↔ hot pairs match 1:1.
+3. **Settings** — network (chain / chain ID / RPC) and relay config (direction, amount + delay randomization).
 
 > **Unofficial / community tool.** Not affiliated with, endorsed by, or operated by Robinhood. "Robinhood Chain" is the
 > public EVM L2; this is an independent utility that talks to it over standard JSON-RPC.

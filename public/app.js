@@ -88,12 +88,15 @@
   function switchTab(which) {
     $("tabGen").classList.toggle("hidden", which !== "gen");
     $("tabRel").classList.toggle("hidden", which !== "rel");
+    $("tabSet").classList.toggle("hidden", which !== "set");
     $("tabGenBtn").classList.toggle("on", which === "gen");
     $("tabRelBtn").classList.toggle("on", which === "rel");
+    $("tabSetBtn").classList.toggle("on", which === "set");
     if (which === "rel") refreshBalances();
   }
   $("tabGenBtn").onclick = () => switchTab("gen");
   $("tabRelBtn").onclick = () => switchTab("rel");
+  $("tabSetBtn").onclick = () => switchTab("set");
 
   // ---------- amount / delay modes ----------
   $("amountMode").onchange = () => $("amountMaxBox").classList.toggle("hidden", $("amountMode").value !== "random");
@@ -141,7 +144,13 @@
   }
 
   function copyText(t) {
-    try { navigator.clipboard.writeText(t); return; } catch { }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).catch(() => { legacyCopy(t); });
+      return;
+    }
+    legacyCopy(t);
+  }
+  function legacyCopy(t) {
     const ta = document.createElement("textarea");
     ta.value = t; document.body.appendChild(ta); ta.select();
     try { document.execCommand("copy"); } catch { }
@@ -211,6 +220,11 @@
       $("netStatus").innerHTML = '<span class="bad">Failed:</span> ' + (e.shortMessage || e.message);
       log("RPC test failed: " + (e.shortMessage || e.message), "bad");
     }
+  };
+
+  $("refreshBal").onclick = () => {
+    $("netStatus").textContent = "Refreshing balances…";
+    refreshBalances();
   };
 
   // ---------- balances ----------
@@ -298,6 +312,33 @@
       $("pairList").appendChild(row);
     }
   }
+
+  // ---------- export all ----------
+  $("exportAll").onclick = () => {
+    if (!main && !buffers.length && !hots.length) {
+      log("Nothing to export — no wallets set.", "bad");
+      return;
+    }
+    const lines = [];
+    lines.push("role,address,private_key,pair_index,paired_with,balance_eth");
+    if (main) {
+      const w = new E.Wallet(main);
+      lines.push("main," + w.address + "," + w.privateKey + ",,,");
+    }
+    const n = Math.min(buffers.length, hots.length);
+    buffers.forEach((k, i) => {
+      const w = new E.Wallet(k);
+      const paired = i < n ? "hot[" + i + "]" : "unmatched";
+      lines.push("buffer," + w.address + "," + w.privateKey + "," + i + "," + paired + ",");
+    });
+    hots.forEach((k, i) => {
+      const w = new E.Wallet(k);
+      const paired = i < n ? "buffer[" + i + "]" : "unmatched";
+      lines.push("hot," + w.address + "," + w.privateKey + "," + i + "," + paired + ",");
+    });
+    copyText(lines.join("\n"));
+    log("Exported " + lines.length + " wallet(s) (addr + key + pairing) — check your clipboard.", "ok");
+  };
 
   // ---------- relay ----------
   function pickAmount() {
