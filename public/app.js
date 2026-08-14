@@ -299,7 +299,7 @@
       const row = document.createElement("div");
       row.className = "pair";
       row.innerHTML =
-        '<span class="kv">' + i + '</span>' +
+        '<span class="kv">' + (i + 1) + '</span>' +
         '<div class="box">buffer · <b>' + bW.address + '</b> <span class="kv">' + bb + ' ETH</span></div>' +
         '<span class="arrow">↔</span>' +
         '<div class="box">hot · <b>' + hW.address + '</b> <span class="kv">' + hb + ' ETH</span></div>' +
@@ -307,7 +307,7 @@
       row.querySelector("[data-pair]").onclick = () => {
         buffers.splice(i, 1); hots.splice(i, 1);
         saveVault(); renderTiers();
-        log("Removed pair " + i + ".", "warn");
+        log("Removed pair " + (i + 1) + ".", "warn");
       };
       $("pairList").appendChild(row);
     }
@@ -325,7 +325,7 @@
       const b = new E.Wallet(k);
       const h = i < hots.length ? new E.Wallet(hots[i]) : null;
       rows.push({
-        pairIndex: i,
+        pairIndex: i + 1,
         mainAddress: "",
         mainKey: "",
         bufferAddress: b.address,
@@ -337,7 +337,7 @@
     if (hots.length > buffers.length) {
       for (let i = buffers.length; i < hots.length; i++) {
         const h = new E.Wallet(hots[i]);
-        rows.push({ pairIndex: i, mainAddress: "", mainKey: "", bufferAddress: "", bufferKey: "", hotAddress: h.address, hotKey: h.privateKey });
+        rows.push({ pairIndex: i + 1, mainAddress: "", mainKey: "", bufferAddress: "", bufferKey: "", hotAddress: h.address, hotKey: h.privateKey });
       }
     }
     return rows;
