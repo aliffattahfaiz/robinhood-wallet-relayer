@@ -318,22 +318,33 @@
     const rows = [];
     if (main) {
       const w = new E.Wallet(main);
-      rows.push({ role: "main", address: w.address, privateKey: w.privateKey, pairIndex: "", pairedWith: "", balance: "" });
+      rows.push({ pairIndex: "main", mainAddress: w.address, mainKey: w.privateKey, bufferAddress: "", bufferKey: "", hotAddress: "", hotKey: "" });
     }
     const n = Math.min(buffers.length, hots.length);
     buffers.forEach((k, i) => {
-      const w = new E.Wallet(k);
-      rows.push({ role: "buffer", address: w.address, privateKey: w.privateKey, pairIndex: i, pairedWith: i < n ? "hot[" + i + "]" : "unmatched", balance: "" });
+      const b = new E.Wallet(k);
+      const h = i < hots.length ? new E.Wallet(hots[i]) : null;
+      rows.push({
+        pairIndex: i,
+        mainAddress: "",
+        mainKey: "",
+        bufferAddress: b.address,
+        bufferKey: b.privateKey,
+        hotAddress: h ? h.address : "",
+        hotKey: h ? h.privateKey : "",
+      });
     });
-    hots.forEach((k, i) => {
-      const w = new E.Wallet(k);
-      rows.push({ role: "hot", address: w.address, privateKey: w.privateKey, pairIndex: i, pairedWith: i < n ? "buffer[" + i + "]" : "unmatched", balance: "" });
-    });
+    if (hots.length > buffers.length) {
+      for (let i = buffers.length; i < hots.length; i++) {
+        const h = new E.Wallet(hots[i]);
+        rows.push({ pairIndex: i, mainAddress: "", mainKey: "", bufferAddress: "", bufferKey: "", hotAddress: h.address, hotKey: h.privateKey });
+      }
+    }
     return rows;
   }
-  const EXPORT_HEADERS = ["role", "address", "private_key", "pair_index", "paired_with", "balance_eth"];
+  const EXPORT_HEADERS = ["pair_index", "main_address", "main_private_key", "buffer_address", "buffer_private_key", "hot_address", "hot_private_key"];
   function rowsToAoa(rows) {
-    return [EXPORT_HEADERS].concat(rows.map((r) => [r.role, r.address, r.privateKey, r.pairIndex, r.pairedWith, r.balance]));
+    return [EXPORT_HEADERS].concat(rows.map((r) => [r.pairIndex, r.mainAddress, r.mainKey, r.bufferAddress, r.bufferKey, r.hotAddress, r.hotKey]));
   }
   function csvCell(v) {
     const s = String(v);

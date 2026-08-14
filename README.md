@@ -7,7 +7,8 @@ static site. Three tabs:
    into the relayer tiers.
 2. **Wallet Relayer** — the tiers and pairing: **main → buffer → hot**, or back up again. Every buffer is paired 1:1
    with a hot wallet and forwards the exact amount it received. Also **Export** — CSV file, XLSX file, or clipboard —
-   dumps every address + private key including which buffer ↔ hot pairs match 1:1.
+   dumps every wallet in a paired layout: each row holds **one buffer + its hot wallet side by side** (same row =
+   same pair index), plus the main wallet on its own row.
 3. **Settings** — network (chain / chain ID / RPC) and relay config (direction, amount + delay randomization).
 
 > **Unofficial / community tool.** Not affiliated with, endorsed by, or operated by Robinhood. "Robinhood Chain" is the
