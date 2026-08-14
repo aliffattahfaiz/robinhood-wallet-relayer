@@ -6,8 +6,8 @@ static site. Three tabs:
 1. **Wallet Generator** — mint fresh random wallets, copy the address + private key, export CSV, or push them straight
    into the relayer tiers.
 2. **Wallet Relayer** — the tiers and pairing: **main → buffer → hot**, or back up again. Every buffer is paired 1:1
-   with a hot wallet and forwards the exact amount it received. Also **Export all** — dumps every address + private key
-   as CSV including which buffer ↔ hot pairs match 1:1.
+   with a hot wallet and forwards the exact amount it received. Also **Export** — CSV file, XLSX file, or clipboard —
+   dumps every address + private key including which buffer ↔ hot pairs match 1:1.
 3. **Settings** — network (chain / chain ID / RPC) and relay config (direction, amount + delay randomization).
 
 > **Unofficial / community tool.** Not affiliated with, endorsed by, or operated by Robinhood. "Robinhood Chain" is the

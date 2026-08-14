@@ -313,31 +313,153 @@
     }
   }
 
-  // ---------- export all ----------
-  $("exportAll").onclick = () => {
-    if (!main && !buffers.length && !hots.length) {
-      log("Nothing to export — no wallets set.", "bad");
-      return;
-    }
-    const lines = [];
-    lines.push("role,address,private_key,pair_index,paired_with,balance_eth");
+  // ---------- export ----------
+  function exportRows() {
+    const rows = [];
     if (main) {
       const w = new E.Wallet(main);
-      lines.push("main," + w.address + "," + w.privateKey + ",,,");
+      rows.push({ role: "main", address: w.address, privateKey: w.privateKey, pairIndex: "", pairedWith: "", balance: "" });
     }
     const n = Math.min(buffers.length, hots.length);
     buffers.forEach((k, i) => {
       const w = new E.Wallet(k);
-      const paired = i < n ? "hot[" + i + "]" : "unmatched";
-      lines.push("buffer," + w.address + "," + w.privateKey + "," + i + "," + paired + ",");
+      rows.push({ role: "buffer", address: w.address, privateKey: w.privateKey, pairIndex: i, pairedWith: i < n ? "hot[" + i + "]" : "unmatched", balance: "" });
     });
     hots.forEach((k, i) => {
       const w = new E.Wallet(k);
-      const paired = i < n ? "buffer[" + i + "]" : "unmatched";
-      lines.push("hot," + w.address + "," + w.privateKey + "," + i + "," + paired + ",");
+      rows.push({ role: "hot", address: w.address, privateKey: w.privateKey, pairIndex: i, pairedWith: i < n ? "buffer[" + i + "]" : "unmatched", balance: "" });
     });
-    copyText(lines.join("\n"));
-    log("Exported " + lines.length + " wallet(s) (addr + key + pairing) — check your clipboard.", "ok");
+    return rows;
+  }
+  const EXPORT_HEADERS = ["role", "address", "private_key", "pair_index", "paired_with", "balance_eth"];
+  function rowsToAoa(rows) {
+    return [EXPORT_HEADERS].concat(rows.map((r) => [r.role, r.address, r.privateKey, r.pairIndex, r.pairedWith, r.balance]));
+  }
+  function csvCell(v) {
+    const s = String(v);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function toCsv(rows) {
+    return rowsToAoa(rows).map((row) => row.map(csvCell).join(",")).join("\r\n");
+  }
+
+  // minimal XLSX writer: builds a valid .xlsx (zip of spreadsheetml xml) with no external deps
+  function buildXlsx(rows) {
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const col = (i) => { let s = ""; i += 1; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+    let sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+    rowsToAoa(rows).forEach((row, ri) => {
+      sheet += '<row r="' + (ri + 1) + '">';
+      row.forEach((cell, ci) => {
+        sheet += '<c r="' + col(ci) + (ri + 1) + '" t="inlineStr"><is><t>' + esc(cell) + '</t></is></c>';
+      });
+      sheet += "</row>";
+    });
+    sheet += "</sheetData></worksheet>";
+
+    const files = [
+      { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>' },
+      { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Wallets" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+      { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>' },
+      { name: "xl/worksheets/sheet1.xml", data: sheet },
+    ];
+
+    // --- zip (store, no compression) ---
+    const enc = new TextEncoder();
+    function crc32(bytes) {
+      let c = 0xFFFFFFFF;
+      for (let i = 0; i < bytes.length; i++) {
+        c ^= bytes[i];
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+    const chunks = [];
+    const central = [];
+    let offset = 0;
+    const u32 = (dv, o, v) => dv.setUint32(o, v, true);
+    const u16 = (dv, o, v) => dv.setUint16(o, v, true);
+
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const data = enc.encode(f.data);
+      const crc = crc32(data);
+      const local = new Uint8Array(30 + name.length + data.length);
+      const dv = new DataView(local.buffer);
+      u32(dv, 0, 0x04034b50); u16(dv, 4, 20); u16(dv, 6, 0); u16(dv, 8, 0);
+      u16(dv, 10, 0); u16(dv, 12, 0); u32(dv, 14, crc);
+      u32(dv, 18, data.length); u32(dv, 22, data.length);
+      u16(dv, 26, name.length); u16(dv, 28, 0);
+      local.set(name, 30); local.set(data, 30 + name.length);
+      chunks.push(local);
+      central.push({ name, crc, size: data.length, offset });
+      offset += local.length;
+    }
+    const cd = [];
+    for (const c of central) {
+      const rec = new Uint8Array(46 + c.name.length);
+      const dv = new DataView(rec.buffer);
+      u32(dv, 0, 0x02014b50); u16(dv, 4, 20); u16(dv, 6, 20); u16(dv, 8, 0); u16(dv, 10, 0);
+      u16(dv, 12, 0); u16(dv, 14, 0); u32(dv, 16, c.crc);
+      u32(dv, 20, c.size); u32(dv, 24, c.size); u16(dv, 28, c.name.length);
+      u16(dv, 30, 0); u16(dv, 32, 0); u16(dv, 34, 0); u16(dv, 36, 0);
+      u32(dv, 38, 0); u32(dv, 42, c.offset);
+      rec.set(c.name, 46);
+      cd.push(rec);
+    }
+    const cdOffset = offset;
+    const cdSize = cd.reduce((s, r) => s + r.length, 0);
+    const eocd = new Uint8Array(22);
+    const dv = new DataView(eocd.buffer);
+    u32(dv, 0, 0x06054b50); u16(dv, 4, 0); u16(dv, 6, 0);
+    u16(dv, 8, central.length); u16(dv, 10, central.length);
+    u32(dv, 12, cdSize); u32(dv, 16, cdOffset); u16(dv, 20, 0);
+
+    const out = new Uint8Array(cdOffset + cdSize + 22);
+    let p = 0;
+    for (const c of chunks) { out.set(c, p); p += c.length; }
+    for (const c of cd) { out.set(c, p); p += c.length; }
+    out.set(eocd, p);
+    return out;
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function guardExport() {
+    if (!main && !buffers.length && !hots.length) {
+      log("Nothing to export — no wallets set.", "bad");
+      return false;
+    }
+    return true;
+  }
+  $("exportCsv").onclick = () => {
+    if (!guardExport()) return;
+    const rows = exportRows();
+    downloadBlob(new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" }), "rh-wallets.csv");
+    log("Exported " + rows.length + " wallet(s) as CSV.", "ok");
+  };
+  $("exportXlsx").onclick = () => {
+    if (!guardExport()) return;
+    const rows = exportRows();
+    const bytes = buildXlsx(rows);
+    downloadBlob(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "rh-wallets.xlsx");
+    log("Exported " + rows.length + " wallet(s) as XLSX.", "ok");
+  };
+  $("exportClip").onclick = () => {
+    if (!guardExport()) return;
+    const rows = exportRows();
+    copyText(toCsv(rows));
+    log("Exported " + rows.length + " wallet(s) to clipboard.", "ok");
   };
 
   // ---------- relay ----------
