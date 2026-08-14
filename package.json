@@ -1,0 +1,10 @@
+{
+  "name": "robinhood-wallet-relayer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Client-side Robinhood (EVM) wallet generator + main/buffer/hot fund relayer. Keys stay in the browser.",
+  "scripts": {
+    "build": "echo 'static site — nothing to build; public/ is served as-is'",
+    "dev": "python3 -m http.server 8080 --directory public"
+  }
+}

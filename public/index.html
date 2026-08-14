@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src https: wss:; img-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://rpc.mainnet.chain.robinhood.com" crossorigin>
+<title>RH Wallet Relayer</title>
+<style>
+  :root{
+    --bg:#000; --panel:#0a0d0b; --line:#173a26;
+    --green:#00ff6a; --green-dim:#0a9d4c; --white:#eaf2ec; --mut:#6f8a79;
+    --red:#ff4d5e; --amber:#ffce4d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;max-width:100%;overflow-x:hidden}
+  body{background:var(--bg);color:var(--white);font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:14px 16px}
+  .wrap{max-width:1320px;margin:0 auto}
+  h1{font-size:15px;margin:0;color:var(--green);letter-spacing:.05em}
+  h2{font-size:11.5px;margin:0 0 9px;color:var(--green);letter-spacing:.08em;text-transform:uppercase}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .sub{color:var(--mut);font-size:11px;margin:0 0 12px}
+  .sub b{color:var(--white)}
+  .tabs{display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:10px}
+  .tab{flex:1;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:6px;color:var(--mut);font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.06em;cursor:pointer;text-align:center}
+  .tab:hover{border-color:var(--green)}
+  .tab.on{background:var(--green);color:#000;border-color:var(--green)}
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:11px;align-items:start}
+  .c4{grid-column:span 4}.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
+  @media(max-width:1000px){.c4,.c6,.c8{grid-column:span 12}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .row>.f{flex:1 1 130px;min-width:100px}
+  label{display:block;color:var(--mut);font-size:11px;margin:0 0 3px}
+  input,textarea,select{width:100%;background:#05060559;color:var(--white);border:1px solid var(--line);border-radius:5px;padding:8px;font:12px ui-monospace,Menlo,monospace;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--green)}
+  textarea{resize:vertical;min-height:42px}
+  .mask{-webkit-text-security:disc}
+  button{background:transparent;color:var(--green);border:1px solid var(--green-dim);border-radius:5px;padding:8px 12px;font:600 12px ui-monospace,Menlo,monospace;cursor:pointer;white-space:nowrap}
+  button:hover{background:var(--green);color:#000;border-color:var(--green)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.ghost{color:var(--mut);border-color:var(--line)}
+  button.ghost:hover{background:var(--line);color:var(--white)}
+  button.danger{color:var(--red);border-color:#5a2028}
+  button.danger:hover{background:var(--red);color:#000;border-color:var(--red)}
+  button.fire{background:var(--green);color:#000;border-color:var(--green);font-size:14px;padding:12px 20px;flex:1}
+  button.fire:hover{background:#4dffa0}
+  .hint{color:var(--mut);font-size:10.5px;margin-top:6px}
+  .status{font-size:12px;color:var(--mut);margin-top:8px;word-break:break-all}
+  .status b{color:var(--white)}
+  .ok{color:var(--green)} .bad{color:var(--red)} .warn{color:var(--amber)}
+  .kv{color:var(--mut)}
+  .pair{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .pair .box{flex:1;border:1px solid var(--line);border-radius:5px;padding:7px 9px;font-size:11px;color:var(--white);word-break:break-all;background:#05060559}
+  .pair .arrow{color:var(--green);font-size:14px}
+  .pair .rm{border:0;background:none;color:var(--mut);padding:2px 6px;font-size:13px;cursor:pointer}
+  .pair .rm:hover{color:var(--red)}
+  .scroll{overflow-x:auto}
+  table.t{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px;min-width:420px}
+  table.t th{text-align:left;color:var(--mut);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+  table.t td{padding:4px 6px;border-bottom:1px solid #0d1f15;color:var(--mut);word-break:break-all}
+  table.t td b{color:var(--white)}
+  table.t tr:hover td{color:var(--white)}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .btns button{flex:1;min-width:120px}
+  .bignum{font-size:11px;color:var(--mut)}
+  pre#log{background:#050705;border:1px solid var(--line);border-radius:8px;padding:11px;height:240px;overflow:auto;margin:0;white-space:pre-wrap;word-break:break-all;font-size:11.5px;color:#bfe9cf}
+  .logbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .hidden{display:none}
+  a{color:var(--green)}
+  @media(max-width:560px){
+    body{padding:10px}
+    input,textarea,select{font-size:16px}
+    button{padding:10px 12px}
+    button.fire{padding:14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <h1>▲ RH WALLET RELAYER</h1>
+  <button class="danger" id="wipe">WIPE SAVED</button>
+</div>
+<p class="sub">Runs 100% in your browser · private keys are <b>encrypted at rest</b> with your password, and only signed txs leave your IP · use <b>burner wallets</b>.</p>
+
+<div class="tabs">
+  <button class="tab on" id="tabGenBtn">1 · WALLET GENERATOR</button>
+  <button class="tab" id="tabRelBtn">2 · WALLET RELAYER</button>
+</div>
+
+<!-- ============ TAB 1: GENERATOR ============ -->
+<div id="tabGen">
+  <div class="grid">
+    <div class="card c4">
+      <h2>Generate wallets</h2>
+      <label>How many? (Robinhood / any EVM)</label>
+      <input id="genCount" value="5" type="number" min="1" max="500" spellcheck="false" autocomplete="off">
+      <div class="btns">
+        <button id="genRun" class="fire" style="flex:1">Generate</button>
+      </div>
+      <div class="status" id="genStatus">New random wallets will appear here. Copy the private key now — it is only shown once until you unlock the vault.</div>
+      <div class="hint">Keys can be saved into the encrypted vault via "Add to buffer / hot" — then they persist on this device behind your password.</div>
+    </div>
+    <div class="card c8">
+      <h2>Generated wallets</h2>
+      <div class="scroll">
+        <table class="t">
+          <thead><tr><th>#</th><th>Address</th><th>Private key</th><th>Actions</th></tr></thead>
+          <tbody id="genList"><tr><td colspan="4" class="kv">No wallets generated yet.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="btns">
+        <button class="ghost" id="genCopyCsv">Copy CSV (address,key)</button>
+        <button id="genToBuf">Add all → buffer</button>
+        <button id="genToHot">Add all → hot</button>
+        <button class="danger" id="genClear">Clear list</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 2: RELAYER ============ -->
+<div id="tabRel" class="hidden">
+  <div class="grid">
+
+    <!-- NETWORK -->
+    <div class="card c6">
+      <h2>Network</h2>
+      <div class="row">
+        <div class="f"><label>Chain</label>
+          <select id="preset">
+            <option value="rh-main">Robinhood Mainnet</option>
+            <option value="rh-test">Robinhood Testnet</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="f"><label>Chain ID</label><input id="chainId" value="4663" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <label style="margin-top:10px">RPC endpoint</label>
+      <input id="rpc" value="https://rpc.mainnet.chain.robinhood.com" spellcheck="false" autocomplete="off">
+      <div class="row" style="margin-top:8px">
+        <button id="testRpc">Test connection</button>
+        <button class="ghost" id="refreshBal">Refresh balances</button>
+      </div>
+      <div class="status" id="netStatus">Not connected.</div>
+    </div>
+
+    <!-- MAIN WALLET -->
+    <div class="card c6">
+      <h2>Main wallet <span class="kv">— exactly 1, holds the source / sink of funds</span></h2>
+      <label>Private key (one only; replacing overwrites)</label>
+      <textarea id="mainKey" class="mask" rows="2" placeholder="0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="mainSave">Save main wallet</button>
+        <button class="ghost" id="mainToggle">Show</button>
+      </div>
+      <div class="status" id="mainStatus">No main wallet.</div>
+    </div>
+
+    <!-- BUFFER WALLETS -->
+    <div class="card c8">
+      <h2>Buffer wallets <span class="kv">— the relay middle tier</span></h2>
+      <label>Private keys — one per line, or generate below</label>
+      <textarea id="bufKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="bufAdd">Add buffer keys</button>
+        <button id="bufGen">Generate 1 buffer</button>
+        <button class="ghost" id="bufToggle">Show</button>
+        <button class="danger" id="bufClear">Clear all</button>
+      </div>
+      <div class="status" id="bufStatus">No buffer wallets.</div>
+    </div>
+
+    <!-- HOT WALLETS -->
+    <div class="card c8">
+      <h2>Hot wallets <span class="kv">— paired 1:1 with buffers, receive / spend</span></h2>
+      <label>Private keys — one per line, or generate below</label>
+      <textarea id="hotKeys" class="mask" rows="4" placeholder="0x…&#10;0x…" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <div class="btns">
+        <button id="hotAdd">Add hot keys</button>
+        <button id="hotGen">Generate 1 hot</button>
+        <button class="ghost" id="hotToggle">Show</button>
+        <button class="danger" id="hotClear">Clear all</button>
+      </div>
+      <div class="status" id="hotStatus">No hot wallets.</div>
+    </div>
+
+    <!-- PAIRING -->
+    <div class="card c12">
+      <h2>Pairing — 1:1 buffer ↔ hot</h2>
+      <div class="status" id="pairStatus"></div>
+      <div id="pairList"></div>
+    </div>
+
+    <!-- RELAY CONFIG -->
+    <div class="card c8">
+      <h2>Relay config</h2>
+      <div class="row">
+        <div class="f"><label>Direction</label>
+          <select id="direction">
+            <option value="down">Deposit · main → buffer → hot</option>
+            <option value="up">Sweep · hot → buffer → main</option>
+          </select>
+        </div>
+        <div class="f"><label>Amount mode</label>
+          <select id="amountMode">
+            <option value="fixed">Fixed</option>
+            <option value="random">Random range</option>
+          </select>
+        </div>
+        <div class="f"><label>Amount (ETH) or min</label><input id="amountMin" value="0.01" spellcheck="false" autocomplete="off"></div>
+        <div class="f hidden" id="amountMaxBox"><label>Amount max (ETH)</label><input id="amountMax" value="0.05" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="f"><label>Delay mode</label>
+          <select id="delayMode">
+            <option value="fixed">Fixed</option>
+            <option value="random">Random range</option>
+          </select>
+        </div>
+        <div class="f"><label>Delay (ms) or min</label><input id="delayMin" value="1500" spellcheck="false" autocomplete="off"></div>
+        <div class="f hidden" id="delayMaxBox"><label>Delay max (ms)</label><input id="delayMax" value="5000" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="hint">Each hop uses a randomized amount + delay so txs don't hit at the same time. Buffer forwards the same amount it received (1:1). Requires gas on every signing wallet.</div>
+      <div class="btns" style="margin-top:10px">
+        <button class="fire" id="relayRun">▶ RUN RELAY</button>
+        <button class="danger" id="relayStop">Stop</button>
+      </div>
+      <div class="status" id="relayStatus"></div>
+    </div>
+
+    <!-- LOG -->
+    <div class="card c12">
+      <div class="logbar"><h2 style="margin:0">Log</h2>
+        <div><button class="ghost" id="copyLog">Copy</button> <button class="ghost" id="clearLog">Clear</button></div></div>
+      <pre id="log" role="log" aria-live="polite" aria-label="Activity log"></pre>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<!-- ============ VAULT OVERLAY ============ -->
+<div id="vaultOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.94);display:none;align-items:center;justify-content:center;z-index:999">
+  <div style="width:min(400px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px">
+    <h2 id="vaultTitle" style="margin:0 0 8px;font-size:15px">Unlock</h2>
+    <p id="vaultDesc" class="kv" style="margin:0 0 12px;font-size:12px"></p>
+    <label class="kv" id="vaultConfirmLabel" style="display:none">Confirm password</label>
+    <input id="vaultConfirm" type="password" style="display:none" autocomplete="new-password" placeholder="repeat password">
+    <label class="kv">Password</label>
+    <input id="vaultPass" type="password" autocomplete="current-password">
+    <div id="vaultMsg" class="kv" style="margin-top:8px;font-size:12px"></div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button id="vaultBtn">Unlock</button>
+      <button class="danger" id="vaultReset">Reset (clear saved)</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/ethers.umd.min.js" integrity="sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM" crossorigin="anonymous"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
